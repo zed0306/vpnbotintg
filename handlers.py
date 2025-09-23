@@ -529,3 +529,47 @@ async def show_balance(message: Message):
         balance_text += "💳 <b>Последние пополнения:</b>\n"
         for payment in payments[:3]:
             status_icon = "✅" if payment.status == 'completed' else "⏳"
+
+@router.message(F.text == "🔗 Все VPN ссылки")
+async def show_all_links(message: Message):
+    user = await rq.get_user(message.from_user.id)
+    if not user:
+        await message.answer("❌ Пользователь не найден")
+        return
+    
+    is_active, status_text = await rq.check_subscription_status(message.from_user.id)
+    
+    if not is_active:
+        await message.answer("❌ Нет активной подписки!")
+        return
+    
+    vless_config = vless_manager.get_user_config(message.from_user.id)
+    
+    if not vless_config:
+        duration_days = await _get_subscription_duration(message.from_user.id)
+        result = vless_manager.generate_stealth_config(message.from_user.id, duration_days)
+        vless_config = result["config"]
+        vless_links = result["vless_links"]
+    else:
+        vless_links = {}
+        for service, path in vless_config["ws_paths"].items():
+            vless_links[service] = vless_manager._generate_stealth_link(
+                vless_config["uuid"], path, vless_config["email"], service
+            )
+    
+    message_text = "🔗 <b>Ваши VPN ссылки для разных сервисов:</b>\n\n"
+    message_text += "🎬 <b>Netflix:</b> Маскировка под видео-трафик\n"
+    message_text += "📺 <b>YouTube:</b> Маскировка под стриминг\n"
+    message_text += "💬 <b>WhatsApp:</b> Маскировка под мессенджер\n"
+    message_text += "⚡ <b>Основная:</b> Универсальная ссылка\n\n"
+    
+    for service, link in vless_links.items():
+        message_text += f"<b>{service.upper()}:</b>\n<code>{link}</code>\n\n"
+    
+    message_text += "📱 <b>Использование:</b>\n"
+    message_text += "• Для Netflix используйте Netflix ссылку\n"
+    message_text += "• Для YouTube используйте YouTube ссылку\n"
+    message_text += "• Для лучшей маскировки используйте соответствующую ссылку\n\n"
+    message_text += "⚠️ <b>Не передавайте ссылки третьим лицам!</b>"
+    
+    await message.answer(message_text)
